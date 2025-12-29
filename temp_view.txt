@@ -1,0 +1,231 @@
+from datetime import datetime
+import json
+import logging
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import SessionLocal
+from models import GenerationTask, Project, FileRecord, TenderAnalysis as TenderAnalysisModel
+from schemas import GenerationTaskCreate, GenerationTaskRead
+from .export import export_word
+from .analysis import _call_llm
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def to_read_model(task: GenerationTask) -> GenerationTaskRead:
+    return GenerationTaskRead(
+        taskId=task.id,
+        projectId=task.project_id,
+        status=task.status,
+        progress=task.progress,
+        currentStage=task.current_stage,
+        statusMessage=task.status_message,
+        resultUrl=task.result_url,
+        errorMessage=task.error_message,
+        configId=task.config_id,
+        startTime=task.started_at,
+        updateTime=task.updated_at,
+    )
+
+
+def _build_section_prompt(project_name: str, summary: str, chapter: dict) -> str:
+    title = chapter.get("title") or chapter.get("heading") or "章节"
+    sections = chapter.get("sections") or []
+    sections_text = "\n".join([f"- {s}" for s in sections if s])
+    return f"""你是一名专业的投标书撰写专家，请用中文生成本章节的正文�?<项目名称>
+{project_name}
+</项目名称>
+<章节标题>
+{title}
+</章节标题>
+<小节要点/占位�?
+{sections_text or "�?}
+</小节要点/占位�?
+<项目摘要>
+{summary}
+</项目摘要>
+
+要求�?- 输出纯中文正文，可包含占位符（例�?{{material:company_intro}}），不可删除占位符�?- 不要使用 Markdown 代码块或列表标记，直接输出段落文本�?- 字数建议 500-1000 字，内容专业、连贯�?"""
+
+
+def _generate_section_content(project_name: str, summary: str, chapter: dict) -> str:
+    prompt = _build_section_prompt(project_name, summary, chapter)
+    resp = _call_llm(prompt)
+    return str(resp).strip()
+
+
+@router.post("/{project_id}", response_model=GenerationTaskRead)
+def start_generation(
+    project_id: int, payload: GenerationTaskCreate = None, db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # 取最新的分析结果，作为生成投标书的内容来�?    analysis = (
+        db.query(TenderAnalysisModel)
+        .filter(TenderAnalysisModel.project_id == project_id)
+        .order_by(TenderAnalysisModel.updated_at.desc())
+        .first()
+    )
+    if not analysis:
+        raise HTTPException(status_code=400, detail="请先完成招标内容解析后再生成投标�?)
+
+    summary = analysis.summary or ""
+    doc_struct = json.loads(analysis.document_structure_json or "[]")
+
+    def build_sections_with_generation(struct, summary_text: str) -> list[dict]:
+        sections = []
+        for ch in struct or []:
+            heading = ch.get("title") or ch.get("heading") or "章节"
+            try:
+                body_text = _generate_section_content(project.name, summary_text, ch)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.exception("生成章节失败 | project_id=%s heading=%s", project_id, heading)
+                raise HTTPException(status_code=502, detail=f"生成章节内容失败: {exc}")
+            sections.append({"heading": heading, "level": 1, "body": body_text})
+        if not sections and summary_text:
+            sections.append({"heading": "概要", "level": 1, "body": summary_text})
+        return sections
+
+    generated_sections = build_sections_with_generation(doc_struct, summary)
+    full_content = "\n\n".join([f"{sec['heading']}\n{sec['body']}" for sec in generated_sections])
+
+    title = f"{project.name} 投标�?
+    filename = f"{project.name}.docx"
+    payload_export = {
+        "title": title,
+        "subtitle": f"项目编号：{project.id}",
+        "sections": generated_sections,
+        "content": full_content,
+        "filename": filename,
+    }
+
+    try:
+        export_res = export_word(payload_export)
+        logger.info(
+            "Export word done for project %s | object=%s filename=%s",
+            project_id,
+            export_res.get("object_name"),
+            export_res.get("filename"),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Export word failed | project_id=%s", project_id)
+        raise HTTPException(status_code=500, detail=f"生成投标书失�? {exc}")
+
+    object_name = export_res.get("object_name")
+    filename = export_res.get("filename") or f"{title}.docx"
+    result_url = None
+
+    # 记录生成文件�?FileRecord，便于前端列�?下载
+    if object_name:
+        file_record = FileRecord(
+            project_id=project_id,
+            filename=filename,
+            object_name=object_name,
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        db.add(file_record)
+        db.commit()
+        db.refresh(file_record)
+        result_url = f"/api/files/{file_record.id}/download"
+        logger.info("Stored generated doc | project_id=%s file_id=%s object=%s url=%s", project_id, file_record.id, object_name, result_url)
+
+    task = GenerationTask(
+        project_id=project_id,
+        status="Completed",
+        progress=100.0,
+        current_stage="Completed",
+        status_message="生成完成",
+        result_url=result_url,
+        config_id=payload.config_id if payload else None,
+        started_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    project.status = "Completed"
+
+    project.updated_at = datetime.utcnow()
+    db.add(task)
+    db.add(project)
+    db.commit()
+    db.refresh(task)
+    return to_read_model(task)
+
+
+@router.get("/{project_id}/latest", response_model=GenerationTaskRead)
+def get_latest_task(project_id: int, db: Session = Depends(get_db)):
+    task = (
+        db.query(GenerationTask)
+        .filter(GenerationTask.project_id == project_id)
+        .order_by(GenerationTask.updated_at.desc())
+        .first()
+    )
+    if not task:
+        raise HTTPException(statuscode=404, detail="Task not found")
+    return to_read_model(task)
+
+
+@router.get("/{project_id}/history", response_model=list[GenerationTaskRead])
+def get_history(project_id: int, db: Session = Depends(get_db)):
+    tasks = (
+        db.query(GenerationTask)
+        .filter(GenerationTask.project_id == project_id)
+        .order_by(GenerationTask.updated_at.desc())
+        .all()
+    )
+    return [to_read_model(t) for t in tasks]
+
+
+@router.get("/{project_id}/{task_id}", response_model=GenerationTaskRead)
+def get_task(project_id: int, task_id: int, db: Session = Depends(get_db)):
+    task = (
+        db.query(GenerationTask)
+        .filter(GenerationTask.project_id == project_id, GenerationTask.id == task_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return to_read_model(task)
+
+
+@router.post("/{project_id}/{task_id}/complete", response_model=GenerationTaskRead)
+def complete_task(project_id: int, task_id: int, db: Session = Depends(get_db)):
+    task = (
+        db.query(GenerationTask)
+        .filter(GenerationTask.project_id == project_id, GenerationTask.id == task_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.status = "Completed"
+    task.progress = 100.0
+    task.current_stage = "Rendering"
+    task.status_message = "生成完成"
+    task.result_url = task.result_url or f"/api/files/download_case_study_word"
+    task.updated_at = datetime.utcnow()
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.status = "Completed"
+        project.updated_at = datetime.utcnow()
+        db.add(project)
+
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return to_read_model(task)
+

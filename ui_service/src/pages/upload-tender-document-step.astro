@@ -1,0 +1,23 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import AppSidebarLayout from '@/components/common/AppSidebarLayout.vue'
+import PageContent from '@/components/upload-tender-document-step/PageContent.vue'
+---
+
+<BaseLayout title="上传招标文件 - 智标助手">
+  <CommonHeader 
+    client:load
+    breadcrumbs={[
+      { label: '项目列表', href: './project-list.html' },
+      { label: '项目详情', href: './project-detail-editor.html' },
+      { label: '上传招标文件' }
+    ]}
+  />
+  <AppSidebarLayout client:load headerHeight="64px">
+    <main class="flex-1">
+      <PageContent client:load />
+    </main>
+  </AppSidebarLayout>
+</BaseLayout>

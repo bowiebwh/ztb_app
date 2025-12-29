@@ -1,0 +1,18 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import BidDocumentContentView from '@/components/bid-document-content-view/BidDocumentContentView.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '投标书预览', href: './bid-document-preview.html' },
+  { label: '内容查看' },
+]
+---
+
+<BaseLayout title="投标书内容查看 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <BidDocumentContentView client:load />
+</BaseLayout>

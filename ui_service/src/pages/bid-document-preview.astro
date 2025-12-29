@@ -1,0 +1,61 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import BidDocumentPreviewHeader from '@/components/bid-document-preview/BidDocumentPreviewHeader.vue'
+import BidDocumentTOCTree from '@/components/bid-document-preview/BidDocumentTOCTree.vue'
+import BidDocumentContentPreview from '@/components/bid-document-preview/BidDocumentContentPreview.vue'
+import BidDocumentPreviewActions from '@/components/bid-document-preview/BidDocumentPreviewActions.vue'
+import { MOCK_GENERATION_TASK_COMPLETED, MOCK_TOC } from '@/data/generation'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '投标书预览', href: './bid-document-preview.html' },
+]
+
+const generationTask = MOCK_GENERATION_TASK_COMPLETED
+const documentTOC = MOCK_TOC
+---
+
+<BaseLayout title="投标书预览与下载 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  
+  <main class="flex-1 bg-background">
+    <div class="container mx-auto px-4 py-6 max-w-7xl">
+      <!-- Header Section -->
+      <BidDocumentPreviewHeader 
+        client:load 
+        taskId={generationTask.taskId}
+        projectId={generationTask.projectId}
+        startTime={generationTask.startTime}
+        status={generationTask.status}
+      />
+
+      <!-- Main Content Area -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
+        <!-- Left: TOC Tree -->
+        <div class="lg:col-span-1">
+          <BidDocumentTOCTree 
+            client:load 
+            toc={documentTOC}
+          />
+        </div>
+
+        <!-- Right: Content Preview -->
+        <div class="lg:col-span-3">
+          <BidDocumentContentPreview 
+            client:load 
+            toc={documentTOC}
+          />
+        </div>
+      </div>
+
+      <!-- Actions Section -->
+      <BidDocumentPreviewActions 
+        client:load 
+        resultUrl={generationTask.resultUrl}
+      />
+    </div>
+  </main>
+</BaseLayout>

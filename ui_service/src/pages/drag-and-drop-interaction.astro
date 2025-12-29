@@ -1,0 +1,21 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import DragDropDemo from '@/components/drag-and-drop-interaction/DragDropDemo.vue'
+---
+
+<BaseLayout title="拖拽绑定交互 - 智标助手">
+  <CommonHeader 
+    client:load
+    breadcrumbs={[
+      { label: '项目列表', href: './project-list.html' },
+      { label: '项目详情', href: './project-detail-editor.html' },
+      { label: '拖拽绑定交互' }
+    ]}
+  />
+  
+  <main class="flex-1 bg-background">
+    <DragDropDemo client:load />
+  </main>
+</BaseLayout>

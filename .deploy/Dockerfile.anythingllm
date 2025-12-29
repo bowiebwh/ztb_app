@@ -1,0 +1,12 @@
+# 基于官方镜像（确认是 Ubuntu/Debian 基础）
+FROM mintplexlabs/anythingllm:latest
+
+# 安装 PDF 解析依赖 (Ubuntu/Debian)
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends poppler-utils && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# 切回非 root 用户（官方镜像推荐）
+USER node

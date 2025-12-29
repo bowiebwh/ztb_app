@@ -1,0 +1,20 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import GenerationStatusContainer from '@/components/generation-status/GenerationStatusContainer.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '生成与下载', href: './generate-download-step.html' },
+  { label: '生成状态' },
+]
+---
+
+<BaseLayout title="生成状态 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <main class="flex-1 container mx-auto px-4 py-8">
+    <GenerationStatusContainer client:load />
+  </main>
+</BaseLayout>

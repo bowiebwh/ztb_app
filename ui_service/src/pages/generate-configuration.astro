@@ -1,0 +1,17 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import GenerateConfigPage from '@/components/generate-configuration/GenerateConfigPage.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '生成配置' },
+]
+---
+
+<BaseLayout title="生成配置 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <GenerateConfigPage client:load />
+</BaseLayout>

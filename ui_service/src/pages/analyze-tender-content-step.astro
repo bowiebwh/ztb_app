@@ -1,0 +1,16 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import AppSidebarLayout from '@/components/common/AppSidebarLayout.vue'
+import AnalyzeTenderContentPage from '@/components/analyze-tender-content-step/AnalyzeTenderContentPage.vue'
+---
+
+<BaseLayout title="招标内容解析 - 智标助手">
+  <CommonHeader client:load />
+  <AppSidebarLayout client:load headerHeight="64px">
+    <main class="flex-1">
+      <AnalyzeTenderContentPage client:idle />
+    </main>
+  </AppSidebarLayout>
+</BaseLayout>

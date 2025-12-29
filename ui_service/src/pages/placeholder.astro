@@ -1,0 +1,42 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+---
+
+<BaseLayout title="页面建设中 - 智标助手">
+  <div class="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+    <Card class="max-w-md w-full">
+      <CardHeader class="text-center">
+        <div class="mx-auto mb-4 w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-primary"
+          >
+            <path d="M12 2v20M2 12h20" />
+          </svg>
+        </div>
+        <CardTitle class="text-2xl">页面建设中</CardTitle>
+        <CardDescription class="text-base mt-2">
+          此页面正在开发中,敬请期待
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="text-center">
+        <a
+          href="./project-list.html"
+          class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+        >
+          返回项目列表
+        </a>
+      </CardContent>
+    </Card>
+  </div>
+</BaseLayout>

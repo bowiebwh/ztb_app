@@ -1,0 +1,70 @@
+version: "3.8"
+services:
+  mysql:
+    image: mysql:8
+    container_name: ztb_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: uxbot
+    ports:
+      - "3307:3306"
+    volumes:
+      - ztb_mysql_data:/var/lib/mysql
+
+  minio:
+    image: quay.io/minio/minio
+    container_name: ztb_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ztb_minio_data:/data
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ztb_ollama
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    volumes:
+      - ztb_ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - app-network
+
+  anythingllm:
+    user: root
+    build:
+      context: .  # 当前目录
+      dockerfile: Dockerfile.anythingllm  # 指向修正后的 Dockerfile
+    container_name: ztb_anythingllm
+    restart: unless-stopped
+    environment:
+      STORAGE_DIR: /app/server/storage
+      OLLAMA_BASE_URL: http://ollama:11435
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      LOG_LEVEL: debug
+    ports:
+      - "3002:3001"
+    volumes:
+      - /home/root/anythingllm-uploads:/app/server/storage
+    networks:
+      - app-network
+
+volumes:
+  ztb_mysql_data:
+  ztb_minio_data:
+  ztb_ollama_data:
+  ztb_anything_storage:
+
+networks:
+  app-network:
+    driver: bridge

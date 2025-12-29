@@ -1,0 +1,13 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import DownloadWordModal from '@/components/download-word-modal/DownloadWordModal.vue'
+---
+
+<BaseLayout title="下载Word文件 - 智标助手">
+  <CommonHeader client:load />
+  <main class="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] bg-background">
+    <DownloadWordModal client:load />
+  </main>
+</BaseLayout>

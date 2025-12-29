@@ -1,0 +1,20 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import DocumentEditor from '@/components/structured-document-editor/DocumentEditor.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '投标文档编辑', href: './edit-bid-document-step.html' },
+  { label: '结构化编辑器' },
+]
+---
+
+<BaseLayout title="结构化文档编辑器 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <main class="flex-1 bg-background">
+    <DocumentEditor client:load />
+  </main>
+</BaseLayout>

@@ -1,0 +1,19 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import AppSidebarLayout from '@/components/common/AppSidebarLayout.vue'
+import EditBidDocumentStepPage from '@/components/edit-bid-document-step/EditBidDocumentStepPage.vue'
+---
+
+<BaseLayout title="投标文档编辑 - 智标助手">
+  <CommonHeader client:load breadcrumbs={[
+    { label: '项目列表', href: './project-list.html' },
+    { label: '项目详情', href: './project-detail-editor.html' },
+    { label: '投标文档编辑' }
+  ]} />
+  
+  <AppSidebarLayout client:load headerHeight="64px">
+    <EditBidDocumentStepPage client:load />
+  </AppSidebarLayout>
+</BaseLayout>

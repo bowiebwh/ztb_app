@@ -1,0 +1,13 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import GenerationFailureContent from '@/components/generation-failure/GenerationFailureContent.vue'
+---
+
+<BaseLayout title="生成失败 - 智标助手">
+  <CommonHeader client:load />
+  <main class="flex-1 bg-background">
+    <GenerationFailureContent client:load />
+  </main>
+</BaseLayout>

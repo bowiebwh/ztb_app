@@ -1,0 +1,30 @@
+# Node modules
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local env files
+.env
+.env.local
+
+# Build output
+dist/
+build/
+.astro/
+
+# Editor/OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.orig
+*.tmp
+*.log
+
+# TypeScript
+*.tsbuildinfo
+

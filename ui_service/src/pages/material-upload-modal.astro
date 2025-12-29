@@ -1,0 +1,9 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import MaterialUploadModal from '@/components/material-upload-modal/MaterialUploadModal.vue'
+---
+
+<BaseLayout title="材料上传 - 智标助手">
+  <MaterialUploadModal client:load open={true} />
+</BaseLayout>

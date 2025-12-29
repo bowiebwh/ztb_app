@@ -1,0 +1,18 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import AppSidebarLayout from '@/components/common/AppSidebarLayout.vue'
+import GenerateDownloadStepPage from '@/components/generate-download-step/GenerateDownloadStepPage.vue'
+---
+
+<BaseLayout title="生成与下载 - 智标助手">
+  <CommonHeader client:load breadcrumbs={[
+    { label: '项目列表', href: './project-list.html' },
+    { label: '项目详情', href: './project-detail-editor.html' },
+    { label: '生成与下载' }
+  ]} />
+  <AppSidebarLayout client:load headerHeight="64px">
+    <GenerateDownloadStepPage client:load />
+  </AppSidebarLayout>
+</BaseLayout>

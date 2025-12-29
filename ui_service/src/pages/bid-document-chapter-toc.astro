@@ -1,0 +1,21 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import BidDocumentChapterToc from '@/components/bid-document-chapter-toc/BidDocumentChapterToc.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '投标书预览', href: './bid-document-preview.html' },
+  { label: '章节目录', href: '#' },
+]
+---
+
+<BaseLayout title="投标书章节目录 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  
+  <main class="flex-1 min-h-[calc(100vh-64px)]">
+    <BidDocumentChapterToc client:load />
+  </main>
+</BaseLayout>

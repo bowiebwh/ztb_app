@@ -1,0 +1,17 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import PlaceholderManagementContent from '@/components/placeholder-management/PlaceholderManagementContent.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './project-detail-editor.html' },
+  { label: '占位符管理' },
+]
+---
+
+<BaseLayout title="占位符管理 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <PlaceholderManagementContent client:load />
+</BaseLayout>

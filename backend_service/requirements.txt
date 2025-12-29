@@ -1,0 +1,13 @@
+
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+pydantic
+python-multipart
+minio
+requests
+python-dotenv
+python-docx
+PyPDF2
+scikit-learn

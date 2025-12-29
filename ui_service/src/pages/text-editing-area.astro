@@ -1,0 +1,17 @@
+
+---
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import CommonHeader from '@/components/common/CommonHeader.vue'
+import TextEditorPage from '@/components/text-editing-area/TextEditorPage.vue'
+
+const breadcrumbs = [
+  { label: '项目列表', href: './project-list.html' },
+  { label: '项目详情', href: './edit-bid-document-step.html' },
+  { label: '文本编辑区', href: './text-editing-area.html' },
+]
+---
+
+<BaseLayout title="文本编辑区 - 智标助手">
+  <CommonHeader client:load breadcrumbs={breadcrumbs} />
+  <TextEditorPage client:load />
+</BaseLayout>
