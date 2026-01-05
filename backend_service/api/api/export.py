@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.oxml.ns import qn
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from minio_client import client, BUCKET, ensure_bucket
 
 router = APIRouter()
@@ -35,7 +35,8 @@ def apply_styles(doc: Document):
     for key in ["w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"]:
         style._element.rPr.rFonts.attrib.pop(qn(key), None)
     style.font.size = Pt(12)  # 小四
-    style.paragraph_format.first_line_indent = Pt(32)
+    # 首行缩进 2 个字符（按 12pt 字号约 24pt）
+    style.paragraph_format.first_line_indent = Pt(24)
     style.paragraph_format.line_spacing = Pt(26)
 
     # 标题样式：方正公文小标宋，小二号/更小字号，黑色
@@ -112,7 +113,7 @@ def add_cover(
     def add_info_line(label: str, value: str):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.paragraph_format.first_line_indent = Pt(16)  # 缩进约1字符
+        p.paragraph_format.first_line_indent = Pt(24)  # 首行缩进 2 字符
         r_label = p.add_run(label)
         r_label.font.name = info_font
         for key in ["w:eastAsia", "w:ascii", "w:hAnsi", "w:cs"]:
@@ -175,29 +176,53 @@ def add_sections(doc: Document, sections: List[Dict[str, Any]]):
             return None
 
     def _add_paragraph_with_images(text: str):
-        # 支持在正文中混排图片标记 [[IMAGE|url|name]]
-        parts = IMAGE_TOKEN_RE.split(text or "")
-        if not parts:
+        """
+        Insert images on their own centered line to avoid overlap with text.
+        Supports tokens like [[IMAGE|object_name|caption]] inside the paragraph text.
+        """
+        if not text:
             return
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        for idx, part in enumerate(parts):
-            if idx % 2 == 0:
-                cleaned = _clean_markdown_line(part)
-                if cleaned:
-                    p.add_run(cleaned)
-            else:
-                object_name = _extract_object_name(part)
-                tmp_path = _load_image_tmp(object_name)
-                if tmp_path:
-                    run = p.add_run()
+
+        cursor = 0
+        matches = list(IMAGE_TOKEN_RE.finditer(text))
+
+        # If there is no image token, keep the original paragraph behavior.
+        if not matches:
+            p = doc.add_paragraph(_clean_markdown_line(text))
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            return
+
+        for m in matches:
+            before = _clean_markdown_line(text[cursor : m.start()])
+            if before:
+                p_text = doc.add_paragraph(before)
+                p_text.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+            object_name = _extract_object_name(m.group(1))
+            tmp_path = _load_image_tmp(object_name)
+            if tmp_path:
+                try:
+                    # 图片独立段落，基于 Normal 样式清除首行缩进、行距，固定上下间距
+                    p_img = doc.add_paragraph(style="Normal")
+                    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    p_img.paragraph_format.first_line_indent = Pt(0)
+                    p_img.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+                    p_img.paragraph_format.space_before = Pt(8)
+                    p_img.paragraph_format.space_after = Pt(8)
+                    run = p_img.add_run()
+                    run.add_picture(tmp_path, width=Cm(14))
+                finally:
                     try:
-                        run.add_picture(tmp_path, width=Cm(14))
-                    finally:
-                        try:
-                            os.unlink(tmp_path)
-                        except Exception:
-                            pass
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+
+            cursor = m.end()
+
+        tail = _clean_markdown_line(text[cursor:])
+        if tail:
+            p_tail = doc.add_paragraph(tail)
+            p_tail.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
     for sec in sections:
         heading = sec.get("heading")

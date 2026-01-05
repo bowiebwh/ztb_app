@@ -70,8 +70,20 @@ export async function createProject(payload: { projectName: string; description?
   return res.json() as Promise<Project>
 }
 
-export async function fetchMaterials(): Promise<Material[]> {
-  const res = await fetch(`${API_BASE}/api/materials`)
+export interface MaterialPage {
+  items: Material[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export async function fetchMaterials(params?: { page?: number; pageSize?: number; type?: string; search?: string }): Promise<MaterialPage> {
+  const url = new URL(`${API_BASE}/api/materials`)
+  if (params?.page) url.searchParams.set('page', String(params.page))
+  if (params?.pageSize) url.searchParams.set('pageSize', String(params.pageSize))
+  if (params?.type) url.searchParams.set('type', params.type)
+  if (params?.search) url.searchParams.set('search', params.search)
+  const res = await fetch(url.toString())
   if (!res.ok) throw new Error('获取素材失败')
   return res.json()
 }
@@ -84,6 +96,12 @@ export async function uploadMaterial(file: File): Promise<Material> {
     body: form,
   })
   if (!res.ok) throw new Error('上传素材失败')
+  return res.json()
+}
+
+export async function deleteMaterial(materialId: string | number) {
+  const res = await fetch(`${API_BASE}/api/materials/${materialId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('删除素材失败')
   return res.json()
 }
 

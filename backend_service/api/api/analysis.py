@@ -50,7 +50,7 @@ def _query_anythingllm(question: str) -> Optional[str]:
 
 def _call_llm(prompt: str) -> str:
     base = os.getenv("OLLAMA_BASE")
-    model = os.getenv("OLLAMA_MODEL", "qwen2:7B")
+    model = os.getenv("OLLAMA_MODEL", "qwen3:14B")
     timeout = int(os.getenv("OLLAMA_TIMEOUT", "300"))
     if not base:
         raise HTTPException(status_code=500, detail="OLLAMA_BASE not configured")
@@ -251,33 +251,43 @@ def _analyze_core(project_id: int, db: Session, refresh: bool = False) -> Tender
 
     prompt = f"""你是一位招投标文件分析专家。目标是基于招标原文与知识库要点，输出“可供后续投标书生成使用”的概要与章节提纲（不写正文）。
 
-    请严格输出 JSON，不要解释、不用 Markdown。字段：
-    - summary: 对招标需求的简要概述，2-4 句话。
-    - keyDates: 关键日期数组，每项包含 label、date（字符串，可为空）。
-    - documentStructure: 章节列表，每项包含 id、title、sections；sections 为要点/小节标题的字符串数组（不写正文）。
+    你的输出的 documentStructure 必须包含投标书中常见的、特别是涉及商务、技术、价格和符合性判断的**核心章节**，例如：**投标函、技术方案、商务和技术偏离表、报价表、资质证明文件、业绩**等。
+    若原文未明确，也必须补齐上述核心章节，并严格按下述模板的编号与顺序组织（可在 sections 中增补要点，但不得删除模板项或改编号）：
+    - 1 投标函
+    - 2.1 第一部分：投标方信息概述（含 2.1.1 公司简介；2.1.2 公司资质证明；2.1.3 营业执照；2.1.4 财务和经营状况良好、近期无亏损声明；2.1.5 依法纳税人资格证明；2.1.6 其他必须具备的资质证明）
+    - 2.2 第二部分：实施服务（含 2.2.1 项目实施方案；2.2.2 服务资源配备-项目人员配置方案；2.2.3 项目管理方案；2.2.4 项目质量管控方案；2.2.5 明确出现问题的解决方案；2.2.6 近三年项目的成功案例）
+    - 2.3 第三部分：售后服务（含服务响应时间、其他必要说明）
+    - 2.4 第四部分：商务相关（报价表、优惠条件）
+    - 2.5 第五部分：评审材料（条款/偏离表、评分索引表）
 
-    输入信息：
-    <提取出的关键信息>
-    {json.dumps(key_info, ensure_ascii=False) if key_info else "无"}
+    只输出**单个 JSON 对象**，不允许任何解释/代码块/多余文本。字段要求：
+    - summary: 2-4 句话的招标需求概述（字符串）。
+    - keyDates: 数组，每项包含 label、date（字符串，可为空）。
+    - documentStructure: 数组，每项包含 id、title、sections；sections 为字符串数组（小节要点，勿写正文）。
 
-    <知识库要点>
-    {kb_answer or "无"}
+    输入信息（仅供参考，不要原样输出标签）：
+    关键信息：{json.dumps(key_info, ensure_ascii=False) if key_info else "无"}
+    知识库要点：{kb_answer or "无"}
+    原文摘录：{raw_text or "无原文摘录"}
+    本地TFIDF片段：{citations_text or "无"}
 
-    <原文摘录>
-    {raw_text or "无原文摘录"}
-
-    <本地TFIDF片段>
-    {citations_text or "无"}
-
-    请直接返回 JSON 对象，格式示例：
+    输出格式示例（请严格遵循字段名和类型，生成真实内容，勿输出示例字样）：
     {{
     "summary": "……",
     "keyDates": [{{"label":"投标截止","date":"2025-01-01"}}, {{"label":"开标时间","date":"2025-01-05"}}],
     "documentStructure": [
-        {{"id":"1","title":"1. 项目概述","sections":["项目背景","需求范围","{{{{material:company_intro}}}}"]}},
-        {{"id":"2","title":"2. 技术方案","sections":["总体设计","关键技术","实施路径","{{{{material:solution_detail}}}}"]}}
+        {{"id":"1","title":"1. 投标函","sections":["投标声明","授权委托书","{{{{material:bid_letter}}}}"]}},
+        {{"id":"2","title":"2. 技术方案","sections":["项目概述","总体设计","7x24小时监测与响应方案","{{{{material:solution_detail}}}}"]}},
+        {{"id":"3","title":"3. 商务与技术偏离表","sections":["技术规格偏离表","商务条款偏离表","{{{{material:deviation_form}}}}"]}},
+        {{"id":"4","title":"4. 报价明细表","sections":["总价表","服务人天单价","{{{{material:pricing_form}}}}"]}},
+        {{"id":"5","title":"5. 资格与业绩","sections":["法人证明文件","上一年度财务报告","项目业绩案例","{{{{material:case_study}}}}"]}}
     ]
     }}
+
+    严格要求：
+    - 仅输出 JSON（单对象），不要包含 ```、多余文本或多个 JSON。
+    - 字段必须包含 summary、keyDates、documentStructure，类型必须匹配。
+    - sections 只写要点/占位符，不写正文内容。
     """
     
     logger.info("LLM 提示词 (project %s):\n%s", project_id, prompt[:2000])
@@ -352,6 +362,74 @@ def _analyze_core(project_id: int, db: Session, refresh: bool = False) -> Tender
             return [str(sec.get("value") or sec.get("title") or sec.get("text") or sec)]
         return [str(sec)]
 
+    core_template: list[dict] = [
+        {
+            "id": "1",
+            "title": "1. 投标函",
+            "sections": ["投标声明", "法定代表人身份证明或授权委托书", "{{material:bid_letter}}"],
+        },
+        {
+            "id": "2.1",
+            "title": "2.1 第一部分：投标方信息概述",
+            "sections": [
+                "2.1.1 公司简介",
+                "2.1.2 公司资质证明",
+                "2.1.3 营业执照",
+                "2.1.4 财务和经营状况良好、近期无亏损声明",
+                "2.1.5 依法纳税人资格证明",
+                "2.1.6 其他必须具备的资质证明",
+                "{{material:company_intro}}",
+            ],
+        },
+        {
+            "id": "2.2",
+            "title": "2.2 第二部分：实施服务",
+            "sections": [
+                "2.2.1 项目实施方案",
+                "2.2.2 服务资源配备-项目人员配置方案",
+                "2.2.3 项目管理方案",
+                "2.2.4 项目质量管控方案",
+                "2.2.5 明确出现问题的解决方案",
+                "2.2.6 近三年项目的成功案例（实施服务）",
+                "{{material:solution_detail}}",
+            ],
+        },
+        {
+            "id": "2.3",
+            "title": "2.3 第三部分：售后服务",
+            "sections": [
+                "2.3.1 承诺的服务响应时间",
+                "2.3.2 有必要说明的其他内容（售后服务）",
+                "{{material:service_plan}}",
+            ],
+        },
+        {
+            "id": "2.4",
+            "title": "2.4 第四部分：商务相关",
+            "sections": [
+                "2.4.1 报价表",
+                "2.4.2 其他优惠条件",
+                "{{material:pricing_form}}",
+            ],
+        },
+        {
+            "id": "2.5",
+            "title": "2.5 第五部分：评审材料",
+            "sections": [
+                "2.5.1 条款/偏离表",
+                "2.5.2 评分索引表",
+                "{{material:deviation_form}}",
+            ],
+        },
+    ]
+
+    def _ensure_core_structure(items: list[dict]) -> list[dict]:
+        required = {"1", "2.1", "2.2", "2.3", "2.4", "2.5"}
+        ids = {str(x.get("id") or x.get("title") or "") for x in items if isinstance(x, dict)}
+        if not required.issubset(ids):
+            return core_template
+        return items
+
     doc_struct: list[dict] = []
     for ch in doc_struct_list:
         if isinstance(ch, dict):
@@ -367,14 +445,9 @@ def _analyze_core(project_id: int, db: Session, refresh: bool = False) -> Tender
         else:
             doc_struct.append({"id": str(ch), "title": str(ch), "sections": []})
 
+    doc_struct = _ensure_core_structure(doc_struct)
     if not doc_struct:
-        doc_struct = [
-            {"id": "overview", "title": "1. 公司概况", "sections": ["企业简介", "核心优势", "{{material:company_intro}}"]},
-            {"id": "solution", "title": "2. 技术方案", "sections": ["总体设计", "关键技术", "实施路径", "{{material:solution_detail}}"]},
-            {"id": "team", "title": "3. 项目团队", "sections": ["组织架构", "关键岗位", "{{material:team_resume}}"]},
-            {"id": "case", "title": "4. 成功案例", "sections": ["案例概览", "{{material:case_study}}"]},
-            {"id": "service", "title": "5. 服务与保障", "sections": ["服务承诺", "质保与培训", "{{material:service_plan}}"]},
-        ]
+        doc_struct = core_template
 
     # 不再因模型格式问题中断，记录日志后继续返回结果
     raw_preview = str(llm_resp) if llm_resp is not None else "<no-response>"
@@ -491,9 +564,14 @@ def build_anythingllm_queries(extracted: dict, project_name: str) -> list[str]:
         )
 
     if scoring_focus:
-        queries.append(
-            f"{project_type or ''} 评分重点 {' '.join(scoring_focus)}"
-        )
+        focus_tokens = []
+        for s in scoring_focus:
+            if isinstance(s, dict):
+                focus_tokens.append(str(s.get("value") or s.get("name") or s.get("title") or s))
+            else:
+                focus_tokens.append(str(s))
+        if focus_tokens:
+            queries.append(f"{project_type or ''} 评分重点 {' '.join(focus_tokens)}")
 
     # 兜底：至少有一个 query
     if not queries:

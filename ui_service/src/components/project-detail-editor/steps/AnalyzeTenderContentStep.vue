@@ -105,11 +105,11 @@ const loadCachedAnalysis = async () => {
   }
 }
 
-const runAnalysis = async () => {
+const runAnalysis = async (refresh = true) => {
   isLoading.value = true
   error.value = ''
   try {
-    analysis.value = await fetchAnalysis(props.projectId, true)
+    analysis.value = await fetchAnalysis(props.projectId, refresh)
   } catch (err) {
     console.error(err)
     error.value = (err as Error)?.message || '获取招标分析失败'
@@ -131,7 +131,7 @@ const handlePreviousStep = () => {
 const handleReanalyze = async () => {
   const confirmed = window.confirm('检测到已有招标分析结果，是否重新分析并覆盖当前结果？')
   if (!confirmed) return
-  await runAnalysis()
+  await runAnalysis(true)
 }
 
 const summaryText = computed(() => {
@@ -183,8 +183,9 @@ onMounted(async () => {
     }
   }
   await loadCachedAnalysis()
-  if (autoRun || !analysis.value) {
-    await runAnalysis()
+  // 仅在上传后自动触发一次刷新，其余场景不调用分析接口，直接展示缓存
+  if (autoRun) {
+    await runAnalysis(true)
   }
   requestAnimationFrame(() => {
     isClient.value = true

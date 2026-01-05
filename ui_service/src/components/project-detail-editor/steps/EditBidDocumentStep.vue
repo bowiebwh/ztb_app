@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { Button } from '@/components/ui/button'
 import SafeIcon from '@/components/common/SafeIcon.vue'
@@ -34,6 +34,8 @@ const bindingSuccess = ref('')
 const manualPlaceholders = ref<string[]>([])
 const newPlaceholder = ref('')
 const saving = ref(false)
+const placeholderPage = ref(1)
+const placeholderPageSize = ref(24)
 
 const loadData = async () => {
   loading.value = true
@@ -42,7 +44,7 @@ const loadData = async () => {
   try {
     const structRes = await fetchDocumentStructure(props.projectId)
     const raw = Array.isArray(structRes?.content) ? structRes.content : []
-    // 确保每个章节都有 body 字段；如无则把 sections 拼成正文，便于回填展示
+    // 确保每个章节都有 body 字段；如无则将 sections 拼成正文，便于回填展示
     structure.value = raw.map((item: any) => {
       const bodyExisting = item?.body
       let bodyText = typeof bodyExisting === 'string' ? bodyExisting : ''
@@ -71,7 +73,7 @@ const loadData = async () => {
     })
     bindings.value = await fetchMaterialBindings(props.projectId)
   } catch (err) {
-    console.error('加载文档结构或占位符绑定失败', err)
+    console.error('加载文件结构或占位符绑定失败', err)
     structure.value = []
     bindings.value = []
   } finally {
@@ -107,11 +109,30 @@ const placeholderKeys = computed(() => {
   }
   scan(structure.value)
   manualPlaceholders.value.forEach(k => keys.add(k))
-  return Array.from(keys)
+  const arr = Array.from(keys)
+  // 閲嶇疆椤电爜閬垮厤瓒婄晫
+  const maxPage = Math.max(1, Math.ceil(arr.length / placeholderPageSize.value))
+  if (placeholderPage.value > maxPage) placeholderPage.value = maxPage
+  return arr
 })
+
+const placeholderPaged = computed(() => {
+  const start = (placeholderPage.value - 1) * placeholderPageSize.value
+  return placeholderKeys.value.slice(start, start + placeholderPageSize.value)
+})
+
+const placeholderTotalPages = computed(() =>
+  Math.max(1, Math.ceil(placeholderKeys.value.length / placeholderPageSize.value))
+)
 
 const findBinding = (key: string) =>
   bindings.value.find((b: any) => String(b.placeholderKey) === String(key))
+
+const findBindingName = (key: string) => {
+  const b = findBinding(key)
+  if (!b) return ''
+  return b.materialName || b.materialId || ''
+}
 
 const allowDrop = (event: DragEvent) => {
   event.preventDefault()
@@ -158,6 +179,11 @@ const addPlaceholder = () => {
     manualPlaceholders.value.push(key)
   }
   newPlaceholder.value = ''
+}
+
+const goPlaceholderPage = (target: number) => {
+  const next = Math.min(Math.max(1, target), placeholderTotalPages.value)
+  placeholderPage.value = next
 }
 
 const handleDeleteBinding = async (bindingId: string | number) => {
@@ -207,7 +233,7 @@ onMounted(() => {
         <SafeIcon name="BookOpen" :size="20" class="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
         <div class="text-sm text-amber-900 dark:text-amber-300">
           <p class="font-medium mb-1">编辑招标文件内容与占位符绑定</p>
-          <p>您可以在下方修改 AI 解析出的文档结构和正文，并在正文中使用占位符替换需要填写的内容。</p>
+          <p>您可以在下方修改 AI 解析出的文件结构和正文，并在正文中使用占位符替换需要填写的内容。</p>
         </div>
       </div>
     </div>
@@ -236,52 +262,58 @@ onMounted(() => {
         </div>
         <div v-if="bindingError" class="text-sm text-red-500">{{ bindingError }}</div>
         <div v-if="bindingSuccess" class="text-sm text-green-600">{{ bindingSuccess }}</div>
-        <div
-          v-for="key in placeholderKeys"
-          :key="key"
-          class="p-3 rounded-lg border border-dashed hover:border-primary/60 transition-colors bg-muted/30 flex items-start gap-3"
-          @dragover="allowDrop"
-          @drop="handleDropOnPlaceholder(key, $event)"
-        >
-          <SafeIcon name="Package" :size="18" class="text-primary mt-0.5" />
-          <div class="flex-1 min-w-0">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <div
+            v-for="key in placeholderPaged"
+            :key="key"
+            class="p-1.5 rounded-lg border border-dashed hover:border-primary/60 transition-colors bg-muted/30 flex flex-col gap-1 h-[60px]"
+            @dragover="allowDrop"
+            @drop="handleDropOnPlaceholder(key, $event)"
+          >
             <div class="flex items-center gap-2">
-              <p class="text-sm font-medium truncate">{{ key }}</p>
+              <SafeIcon name="Package" :size="16" class="text-primary" />
+              <p class="text-xs font-medium truncate" :title="key">{{ key }}</p>
               <span
-                class="text-xs px-2 py-0.5 rounded-full"
+                class="text-[10px] px-1.5 py-0.5 rounded-full"
                 :class="findBinding(key) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'"
               >
                 {{ findBinding(key) ? '已绑定' : '未绑定' }}
               </span>
             </div>
-            <p class="text-xs text-muted-foreground mt-1">
-              {{
-                findBinding(key)
-                  ? findBinding(key)?.materialName || findBinding(key)?.materialId
-                  : '拖拽素材到此处进行绑定'
-              }}
-            </p>
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-muted-foreground truncate" :title="findBindingName(key)">
+                {{ findBinding(key) ? findBindingName(key) : '拖拽素材到此处进行绑定' }}
+              </p>
+              <Button
+                v-if="findBinding(key)"
+                size="sm"
+                variant="ghost"
+                class="text-red-500 h-7 px-2"
+                @click="handleDeleteBinding(findBinding(key)?.bindingId)"
+              >
+                删除
+              </Button>
+            </div>
           </div>
-          <Button
-            v-if="findBinding(key)"
-            size="sm"
-            variant="ghost"
-            class="text-red-500"
-            @click="handleDeleteBinding(findBinding(key)?.bindingId)"
-          >
-            删除
-          </Button>
         </div>
         <div v-if="!placeholderKeys.length" class="text-sm text-muted-foreground">
-          暂无占位符，可添加新占位符或从正文中加入 &#123;&#123;placeholder&#125;&#125; 触发识别。
+          暂无占位符，可添加新占位符或从正文中加入 {{placeholder}} 触发识别。
+        </div>
+        <div v-else class="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+          <Button variant="outline" size="sm" :disabled="placeholderPage <= 1" @click="goPlaceholderPage(placeholderPage - 1)">
+            上一页
+          </Button>
+          <span>{{ placeholderPage }} / {{ placeholderTotalPages }}</span>
+          <Button variant="outline" size="sm" :disabled="placeholderPage >= placeholderTotalPages" @click="goPlaceholderPage(placeholderPage + 1)">
+            下一页
+          </Button>
         </div>
       </div>
     </div>
 
-    <!-- 文档结构 -->
     <div class="bg-card border rounded-lg p-4 space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="font-semibold">文档结构</h3>
+        <h3 class="font-semibold">文件结构</h3>
         <div class="flex items-center gap-2">
           <Button size="sm" variant="outline" @click="loadData" :disabled="loading">
             <SafeIcon name="RefreshCw" :size="14" class="mr-1" />
@@ -295,7 +327,7 @@ onMounted(() => {
       </div>
       <div v-if="loading" class="text-sm text-muted-foreground">加载中...</div>
       <div v-else-if="!structure.length" class="text-sm text-muted-foreground">
-        未加载到文档结构，请尝试重新上传招标文件或手动添加。
+        未加载到文件结构，请尝试重新上传招标文件或手动添加。
       </div>
       <div v-else class="space-y-4">
         <div
@@ -315,13 +347,13 @@ onMounted(() => {
           <textarea
             v-model="item.body"
             class="w-full h-32 text-sm rounded border px-3 py-2 bg-white"
-            placeholder="在此处填写或修改正文内容，可使用 &#123;&#123;material:xxx&#125;&#125; 占位符"
+            placeholder="在此处填写或修改正文内容，可使用 {{material:xxx}} 占位符"
           />
         </div>
       </div>
     </div>
 
-    <!-- Tips -->
+        <!-- Tips -->
     <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
       <div class="flex gap-3">
         <SafeIcon name="Lightbulb" :size="20" class="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
@@ -354,3 +386,6 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+
+

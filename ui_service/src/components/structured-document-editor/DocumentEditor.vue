@@ -20,7 +20,8 @@ const projectId = ref<string>('1')
 const loadData = async () => {
   projectId.value = new URLSearchParams(window.location.search).get('id') || '1'
   documentContent.value = (await fetchDocumentStructure(projectId.value)).content || []
-  materials.value = await fetchMaterials()
+  const res = await fetchMaterials({ pageSize: 100 })
+  materials.value = res.items || []
   bindings.value = await fetchMaterialBindings(projectId.value)
 }
 

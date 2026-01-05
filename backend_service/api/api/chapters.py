@@ -21,7 +21,7 @@ def get_db():
 
 def _call_llm(prompt: str) -> str:
     base = os.getenv("OLLAMA_BASE")
-    model = os.getenv("OLLAMA_MODEL", "qwen2:7B")
+    model = os.getenv("OLLAMA_MODEL", "qwen3:14B")
     if not base:
         raise Exception("OLLAMA_BASE not configured")
     resp = requests.post(

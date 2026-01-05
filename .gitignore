@@ -28,3 +28,7 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
+# Python 编译文件
+*.pyc
+# 存储 .pyc 文件的目录（Python 3.2+ 版本创建的）
+__pycache__/

@@ -10,3 +10,11 @@ from .pipeline import router as pipeline_router  # noqa: F401
 from .chapters import router as chapters_router  # noqa: F401
 from .export import router as export_router  # noqa: F401
 from .document import router as document_router  # noqa: F401
+# Ensure submodules are importable as api.api.export, etc.
+from . import export  # noqa: F401
+
+# Ensure local backend_service root is ahead of site-packages to avoid same-name package shadowing
+import sys, os  # noqa: E401
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if base_dir not in sys.path:
+    sys.path.insert(0, base_dir)

@@ -83,6 +83,16 @@ class MaterialUploadResponse(BaseModel):
         orm_mode = True
         allow_population_by_field_name = True
 
+class MaterialPage(BaseModel):
+    items: List[Material]
+    total: int
+    page: int
+    page_size: int = Field(..., alias="pageSize")
+
+    class Config:
+        orm_mode = True
+        allow_population_by_field_name = True
+
 
 # ---------- Tender Analysis ----------
 

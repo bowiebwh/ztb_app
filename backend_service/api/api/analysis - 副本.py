@@ -50,7 +50,7 @@ def _query_anythingllm(question: str) -> Optional[str]:
 
 def _call_llm(prompt: str) -> str:
     base = os.getenv("OLLAMA_BASE")
-    model = os.getenv("OLLAMA_MODEL", "qwen2:7B")
+    model = os.getenv("OLLAMA_MODEL", "qwen3:14B")
     timeout = int(os.getenv("OLLAMA_TIMEOUT", "300"))
     if not base:
         raise HTTPException(status_code=500, detail="OLLAMA_BASE not configured")

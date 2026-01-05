@@ -26,6 +26,19 @@ services:
     volumes:
       - ztb_minio_data:/data
 
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ztb_ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11435:11434"
+  #   volumes:
+  #     - ztb_ollama_data:/root/.ollama
+  #   environment:
+  #     - OLLAMA_HOST=0.0.0.0
+  #   networks:
+  #     - app-network
+
   ollama:
     image: ollama/ollama:latest
     container_name: ztb_ollama
@@ -33,12 +46,19 @@ services:
     ports:
       - "11435:11434"
     volumes:
-      - ztb_ollama_data:/root/.ollama
+      - /mnt/e/ollama_models:/root/.ollama # 模型存储路径
     environment:
       - OLLAMA_HOST=0.0.0.0
     networks:
       - app-network
-
+    deploy: # GPU 推理配置
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+              
   anythingllm:
     user: root
     build:

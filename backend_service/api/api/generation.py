@@ -18,6 +18,10 @@ from models import (
     TenderAnalysis as TenderAnalysisModel,
 )
 from schemas import GenerationTaskCreate, GenerationTaskRead
+import sys, os
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if base_dir not in sys.path:
+    sys.path.insert(0, base_dir)
 from .export import export_word
 from .analysis import (
     _call_llm,
@@ -64,43 +68,46 @@ def _build_section_prompt(
 ) -> str:
     title = chapter.get("title") or chapter.get("heading") or "章节"
     sections = chapter.get("sections") or []
-    sections_text = "\n".join([f"- {s}" for s in sections if s])
+    # 使用编号列出要点，使输入更清晰
+    sections_text = "\n".join([f"({i+1}) {s}" for i, s in enumerate(sections) if s])
     key_info_text = json.dumps(key_info or {}, ensure_ascii=False)
-    return f"""你是一名专业的投标书撰写专家，请用中文生成本章节的正文（只生成当前章节内容，不要输出小标题，不要输出 JSON/列表/Markdown）。
+    
+    return f"""你是一名专业的投标书撰写专家。你的任务是根据提供的所有资料，为项目「{project_name}」生成**当前章节**的正式投标书正文。
 
-    <项目名称>
-    {project_name}
-    </项目名称>
+    [⚠️ 严格格式要求 - 必须遵守]
+    1. **只输出本章节的**正文内容**，且必须保证内容在全文中是连续的。**
+    2. **绝不能**包含任何开头称谓 (如“尊敬的...” “您好”等) 或结尾术语 (如“此致 敬礼” “顺祝商祺”等)。
+    3. **绝不能**包含任何解释性文字、旁白或注释（如“请注意”、“注”、“本章节旨在说明”等）。
+    4. 绝不能输出章节标题、编号、JSON、标签或任何Markdown格式。
+    5. 确保在内容上与前后章节内容衔接自然，保持全文连贯的专业文风。
+    6. 严禁输出“结语”“公司署名”“日期”等独立段落，严禁概括招标文件或新增未在章节要点内的主题。
+    7. 必须完整展开“章节要点”中的每一项，使用正式表述串联成连续段落；不得生成空洞或与要点无关的内容。
+    8. 如章节标题或要点包含编号/层级，需按原编号顺序组织表述，可在正文中使用对应的小标题编号，但不得新增未提供的小节。
 
-    <章节标题>
-    {title}
-    </章节标题>
+    [项目信息]
+    项目名称: {project_name}
+    章节标题: {title}
+    项目摘要 (仅供参考): {summary or "无"}
 
-    <小节要点/占位符>
+    [章节内容来源]
+    章节要点 (须全部展开并整合):
     {sections_text or "无"}
-    </小节要点/占位符>
 
-    <项目摘要>
-    {summary or "无"}
-    </项目摘要>
-
-    <知识库要点>
+    知识库要点 (可直接复用高质量表述):
     {kb_answer or "无"}
-    </知识库要点>
 
-    <招标关键信息>
+    招标关键信息 (JSON，仅作参考):
     {key_info_text}
-    </招标关键信息>
 
-    <原文/证据片段>
+    原文/证据 (可直接吸收的关键句子):
     {evidence or "无"}
-    </原文/证据片段>
 
-    写作要求：
-    - 输出纯中文正文，可包含占位符（例如 {{material:company_intro}}），不要删除或改写占位符。
-    - 不要使用 Markdown 代码块或列表标记，直接输出连续段落文本。
-    - 内容专业、连贯，紧扣要点与证据，避免空洞表述。
-    """
+    =======================================
+    [写作要求 - 确保专业与连贯性]
+    1. **语气与风格**: 必须采用**正式、严谨、专业的投标书**文体。内容应是以**我方**（三六零数字安全科技集团有限公司）的名义进行的方案陈述、能力展示或郑重承诺。
+    2. **内容连贯**: 逐一、完整地吸收并**整合**“章节要点”中的所有内容，使用**流畅的过渡句和正式的措辞**将其融合成**连续、逻辑严密的段落或子章节**。
+    3. **结构化细化**: 如果内容丰富，请在正文内部使用**二级或三级带编号的小标题**（例如：2.1.1、2.1.2 等）来组织内容，以增强文档的专业结构感。
+    4. **占位符**: 必须保留并使用占位符（如 {{material:xxx}}）在正文中适当的位置，**不得改写、删除或解释占位符本身**。"""
 
 
 def _generate_section_content(
@@ -244,16 +251,24 @@ def start_generation(
                 out = out.replace(f"{{{{ {short} }}}}", val)
         return out
 
+    # 保留未替换占位符的正文用于前端编辑；生成替换版用于导出
+    cleaned_sections: list[dict] = []
+    replaced_sections: list[dict] = []
     for sec in generated_sections:
-        body_text = str(sec.get("body") or "")
-        body_text = _clean_markdown(body_text)
-        sec["body"] = replace_placeholders(body_text)
         heading_text = _clean_markdown(sec.get("heading") or sec.get("title") or "")
-        sec["heading"] = heading_text or "章节"
+        body_text = _clean_markdown(str(sec.get("body") or ""))
+        cleaned_sections.append({"heading": heading_text or "章节", "level": sec.get("level", 1), "body": body_text})
+        replaced_sections.append(
+            {
+                "heading": replace_placeholders(heading_text or "章节"),
+                "level": sec.get("level", 1),
+                "body": replace_placeholders(body_text),
+            }
+        )
 
-    full_content = "\n\n".join([f"{sec['heading']}\n{sec['body']}" for sec in generated_sections])
+    full_content = "\n\n".join([f"{sec['heading']}\n{sec['body']}" for sec in replaced_sections])
 
-    # 保存生成结果用于前端编辑展示，保留结构信息
+    # 保存生成结果用于前端编辑展示，保留未替换的占位符
     doc_content = db.query(DocumentContent).filter(DocumentContent.project_id == project_id).first()
     try:
         existing = json.loads(doc_content.content_json) if doc_content and doc_content.content_json else {}
@@ -263,7 +278,7 @@ def start_generation(
         existing = {"content": existing, "structure": existing}
 
     new_payload = {
-        "content": generated_sections,
+        "content": cleaned_sections,
         "structure": existing.get("structure") or doc_struct,
     }
     if not doc_content:
@@ -279,7 +294,7 @@ def start_generation(
     payload_export = {
         "title": title,
         "subtitle": "（正本）",
-        "sections": generated_sections,
+        "sections": replaced_sections,
         "content": full_content,
         "filename": filename,
         "project_name": project.name,

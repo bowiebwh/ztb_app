@@ -86,7 +86,8 @@ onMounted(async () => {
     const rawStructure = Array.isArray(docRes.structure) ? docRes.structure : []
     documentStructure.value = rawStructure
     documentContent.value = normalizeContent(rawContent.length ? rawContent : rawStructure)
-    materials.value = await fetchMaterials()
+    const res = await fetchMaterials({ pageSize: 100 })
+    materials.value = res.items || []
     bindings.value = await fetchMaterialBindings(currentProjectId.value)
   } catch (err) {
     console.error(err)

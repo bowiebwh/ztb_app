@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import SafeIcon from '@/components/common/SafeIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { Material } from '@/lib/api'
-import { fetchMaterials, uploadMaterial } from '@/lib/api'
+import { fetchMaterials, uploadMaterial, deleteMaterial } from '@/lib/api'
 
 interface Props {
   projectId: string
@@ -23,22 +23,17 @@ const searchQuery = ref('')
 const selectedType = ref<'all' | 'Image' | 'PDF' | 'Word' | 'Excel'>('all')
 const isUploading = ref(false)
 const materials = ref<Material[]>([])
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 const error = ref('')
-
-const filteredMaterials = computed(() => {
-  return materials.value.filter(material => {
-    const matchesSearch = material.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesType = selectedType.value === 'all' || material.type === selectedType.value
-    return matchesSearch && matchesType
-  })
-})
 
 const materialsByType = computed(() => {
   return {
-    Image: filteredMaterials.value.filter(m => m.type === 'Image'),
-    PDF: filteredMaterials.value.filter(m => m.type === 'PDF'),
-    Word: filteredMaterials.value.filter(m => m.type === 'Word'),
-    Excel: filteredMaterials.value.filter(m => m.type === 'Excel'),
+    Image: materials.value.filter(m => m.type === 'Image'),
+    PDF: materials.value.filter(m => m.type === 'PDF'),
+    Word: materials.value.filter(m => m.type === 'Word'),
+    Excel: materials.value.filter(m => m.type === 'Excel'),
   }
 })
 
@@ -118,12 +113,46 @@ const handleDragStart = (material: Material, event: DragEvent) => {
 const loadMaterials = async () => {
   error.value = ''
   try {
-    materials.value = await fetchMaterials()
+    const res = await fetchMaterials({
+      page: page.value,
+      pageSize: pageSize.value,
+      type: selectedType.value === 'all' ? undefined : selectedType.value,
+      search: searchQuery.value.trim() || undefined,
+    })
+    materials.value = res.items || []
+    total.value = res.total || 0
   } catch (err) {
     console.error(err)
     error.value = '加载素材失败'
   }
 }
+
+const handleDelete = async (material: Material) => {
+  const ok = window.confirm(`确定删除素材「${material.name}」？将同时解除绑定并删除存储文件。`)
+  if (!ok) return
+  error.value = ''
+  try {
+    await deleteMaterial(material.materialId)
+    await loadMaterials()
+  } catch (err) {
+    console.error(err)
+    error.value = '删除素材失败'
+  }
+}
+
+const totalPages = computed(() => Math.max(1, Math.ceil((total.value || 0) / pageSize.value)))
+
+const goPage = async (target: number) => {
+  const next = Math.min(Math.max(1, target), totalPages.value)
+  if (next === page.value) return
+  page.value = next
+  await loadMaterials()
+}
+
+watch([searchQuery, selectedType], () => {
+  page.value = 1
+  loadMaterials()
+})
 
 onMounted(async () => {
   isClient.value = false
@@ -192,11 +221,19 @@ onMounted(async () => {
             Word
           </TabsTrigger>
         </TabsList>
+        <div class="px-4 pt-2 pb-2 text-xs text-muted-foreground border-b bg-card">
+          <p class="mb-2 text-left">提示：拖拽素材到文档占位符进行替换</p>
+          <div class="flex items-center justify-start gap-2">
+            <Button variant="outline" size="sm" :disabled="page <= 1" @click="goPage(page - 1)">上一页</Button>
+            <span>{{ page }} / {{ totalPages }}</span>
+            <Button variant="outline" size="sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</Button>
+          </div>
+        </div>
 
         <TabsContent value="all" class="flex-1 overflow-y-auto p-3 space-y-2">
-          <template v-if="filteredMaterials.length > 0">
+          <template v-if="materials.length > 0">
             <div
-              v-for="material in filteredMaterials"
+              v-for="material in materials"
               :key="material.materialId"
               draggable="true"
               @dragstart="handleDragStart(material, $event)"
@@ -211,6 +248,12 @@ onMounted(async () => {
                   <p class="text-xs text-muted-foreground">{{ formatFileSize(material.size) }}</p>
                   <a :href="material.url" target="_blank" class="text-xs text-primary hover:underline">下载</a>
                 </div>
+                <button
+                  class="text-xs text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  @click="handleDelete(material)"
+                >
+                  删除
+                </button>
               </div>
             </div>
           </template>
@@ -249,6 +292,7 @@ onMounted(async () => {
                   <p class="text-xs text-muted-foreground">{{ formatFileSize(material.size) }}</p>
                   <a :href="material.url" target="_blank" class="text-xs text-primary hover:underline">下载</a>
                 </div>
+                <button class="text-xs text-red-500" @click="handleDelete(material)">删除</button>
               </div>
             </div>
           </template>
@@ -274,6 +318,7 @@ onMounted(async () => {
                   <p class="text-xs font-medium truncate">{{ material.name }}</p>
                   <p class="text-xs text-muted-foreground">{{ formatFileSize(material.size) }}</p>
                 </div>
+                <button class="text-xs text-red-500" @click="handleDelete(material)">删除</button>
               </div>
             </div>
           </template>
@@ -299,6 +344,7 @@ onMounted(async () => {
                   <p class="text-xs font-medium truncate">{{ material.name }}</p>
                   <p class="text-xs text-muted-foreground">{{ formatFileSize(material.size) }}</p>
                 </div>
+                <button class="text-xs text-red-500" @click="handleDelete(material)">删除</button>
               </div>
             </div>
           </template>
@@ -324,6 +370,7 @@ onMounted(async () => {
                   <p class="text-xs font-medium truncate">{{ material.name }}</p>
                   <p class="text-xs text-muted-foreground">{{ formatFileSize(material.size) }}</p>
                 </div>
+                <button class="text-xs text-red-500" @click="handleDelete(material)">删除</button>
               </div>
             </div>
           </template>
@@ -334,9 +381,7 @@ onMounted(async () => {
       </Tabs>
     </div>
 
-    <div class="border-t bg-muted/30 px-4 py-2 flex-shrink-0 text-xs text-muted-foreground">
-      <p>提示：拖拽素材到文档占位符进行替换</p>
-    </div>
+    <div class="border-t bg-muted/30 px-4 py-2 flex-shrink-0 text-xs text-muted-foreground"></div>
   </div>
 </template>
 

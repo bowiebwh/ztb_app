@@ -3,7 +3,7 @@ import os
 import uuid
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
@@ -11,7 +11,7 @@ from minio_client import BUCKET, client, ensure_bucket
 from models import DocumentChunk
 from models import Material as MaterialModel
 from models import MaterialBinding
-from schemas import Material, MaterialUploadResponse
+from schemas import Material, MaterialUploadResponse, MaterialPage
 from text_parser import parse_file_bytes
 
 router = APIRouter()
@@ -25,10 +25,28 @@ def get_db():
         db.close()
 
 
-@router.get("/", response_model=list[Material])
-def list_materials(db: Session = Depends(get_db)):
-    records = db.query(MaterialModel).order_by(MaterialModel.upload_time.desc()).all()
-    return [
+@router.get("/", response_model=MaterialPage)
+def list_materials(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    type: str | None = None,
+    search: str | None = None,
+):
+    query = db.query(MaterialModel)
+    if type:
+        query = query.filter(MaterialModel.type == type)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(MaterialModel.name.ilike(like))
+    total = query.count()
+    records = (
+        query.order_by(MaterialModel.upload_time.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    items = [
         Material(
             materialId=str(r.id),
             type=r.type,
@@ -41,6 +59,7 @@ def list_materials(db: Session = Depends(get_db)):
         )
         for r in records
     ]
+    return {"items": items, "total": total, "page": page, "pageSize": page_size}
 
 
 @router.post("/upload", response_model=MaterialUploadResponse)
@@ -117,6 +136,14 @@ def upload_material(file: UploadFile, db: Session = Depends(get_db)):
     )
 
 
+def _extract_object_name(url: str | None) -> str | None:
+    if not url:
+        return None
+    if "/download/" in url:
+        return url.split("/download/", 1)[-1].lstrip("/")
+    return url.lstrip("/")
+
+
 def _guess_material_type(filename: str, content_type: str | None) -> str:
     lower = filename.lower()
     if lower.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
@@ -171,18 +198,19 @@ def bind_material(payload: dict, db: Session = Depends(get_db)):
 
 @router.get("/bindings")
 def list_bindings(project_id: int | None = None, db: Session = Depends(get_db)):
-    query = db.query(MaterialBinding)
+    query = db.query(MaterialBinding, MaterialModel).join(MaterialModel, MaterialModel.id == MaterialBinding.material_id)
     if project_id is not None:
         query = query.filter(MaterialBinding.project_id == project_id)
-    bindings = query.order_by(MaterialBinding.created_at.desc()).all()
+    rows = query.order_by(MaterialBinding.created_at.desc()).all()
     return [
         {
             "bindingId": b.id,
             "projectId": b.project_id,
             "placeholderKey": b.placeholder_key,
             "materialId": b.material_id,
+            "materialName": m.name if m else None,
         }
-        for b in bindings
+        for b, m in rows
     ]
 
 
@@ -194,3 +222,27 @@ def delete_binding(binding_id: int, db: Session = Depends(get_db)):
     db.delete(binding)
     db.commit()
     return {"deleted": True, "bindingId": binding_id}
+
+
+@router.delete("/{material_id}")
+def delete_material(material_id: int, db: Session = Depends(get_db)):
+    mat = db.query(MaterialModel).filter(MaterialModel.id == material_id).first()
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    # 删除绑定与解析缓存
+    db.query(MaterialBinding).filter(MaterialBinding.material_id == material_id).delete()
+    db.query(DocumentChunk).filter(DocumentChunk.file_id == material_id).delete()
+
+    # 删除 MinIO 对象
+    object_name = _extract_object_name(mat.url)
+    if object_name:
+        try:
+            client.remove_object(BUCKET, object_name)
+        except Exception:
+            # ignore removal errors but log if needed
+            pass
+
+    db.delete(mat)
+    db.commit()
+    return {"deleted": True, "materialId": material_id}
