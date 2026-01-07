@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: uxbot
+      MYSQL_DATABASE: ztb
     ports:
       - "3306:3306"
     volumes:
@@ -71,7 +71,7 @@ echo "Starting infra containers (MySQL, MinIO, Ollama, AnythingLLM)..."
 docker compose -f "${COMPOSE_FILE}" up -d
 
 echo "Importing schema.sql into MySQL..."
-docker exec -i ztb_mysql sh -c "mysql -uroot -ppassword uxbot" < "${ROOT_DIR}/backend_service/schema.sql" || true
+docker exec -i ztb_mysql sh -c "mysql -uroot -ppassword ztb" < "${ROOT_DIR}/backend_service/schema.sql" || true
 
 echo "Backend env template (.env) is in backend_service/.env.example"
 echo "Frontend env template (.env) is in ui_service/.env.example"

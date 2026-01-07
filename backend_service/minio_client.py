@@ -10,7 +10,7 @@ client = Minio(
     secure=False,
 )
 
-BUCKET = os.getenv("MINIO_BUCKET", "uxbot")
+BUCKET = os.getenv("MINIO_BUCKET", "ztb")
 
 def ensure_bucket() -> None:
     """Create bucket if not exists."""

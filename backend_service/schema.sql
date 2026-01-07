@@ -1,6 +1,6 @@
 -- Create database (adjust name/charset as needed)
-CREATE DATABASE IF NOT EXISTS uxbot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE uxbot;
+CREATE DATABASE IF NOT EXISTS ztb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE ztb;
 
 -- Projects
 CREATE TABLE IF NOT EXISTS projects (

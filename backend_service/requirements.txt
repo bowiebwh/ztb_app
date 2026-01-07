@@ -11,3 +11,4 @@ python-dotenv
 python-docx
 PyPDF2
 scikit-learn
+cryptography

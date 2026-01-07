@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: uxbot
+      MYSQL_DATABASE: ztb
     ports:
       - "3307:3306"
     volumes:
@@ -58,7 +58,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-              
+
   anythingllm:
     user: root
     build:
